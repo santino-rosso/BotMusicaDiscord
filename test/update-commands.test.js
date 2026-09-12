@@ -96,6 +96,8 @@ beforeEach(() => {
   eventLog.length = 0;
   rest.instances.length = 0;
   rest.fail = false;
+  process.env.CLIENT_ID = '123456789';
+  delete process.env.GUILD_ID;
 });
 
 describe('checkAndUpdateCommands', () => {
@@ -116,6 +118,7 @@ describe('checkAndUpdateCommands', () => {
     assert.equal(written.count, 9);
     assert.ok(written.hash.length > 0);
     assert.ok(written.timestamp);
+    assert.equal(written.clientId, '123456789');
     firstHash = written.hash;
   });
 
@@ -123,7 +126,7 @@ describe('checkAndUpdateCommands', () => {
     assert.ok(firstHash, 'el hash capturado del primer arranque');
     stateStore.set(
       statePath,
-      JSON.stringify({ hash: firstHash, timestamp: 'anterior', count: 9 })
+      JSON.stringify({ hash: firstHash, clientId: '123456789', timestamp: 'anterior', count: 9 })
     );
 
     const result = await checkAndUpdateCommands();
@@ -136,7 +139,7 @@ describe('checkAndUpdateCommands', () => {
   test('deploy que falla: no guarda el hash nuevo, queda el viejo', async () => {
     stateStore.set(
       statePath,
-      JSON.stringify({ hash: 'old-hash-000', timestamp: 'anterior', count: 9 })
+      JSON.stringify({ hash: 'old-hash-000', clientId: '123456789', timestamp: 'anterior', count: 9 })
     );
     rest.fail = true;
 
@@ -160,7 +163,7 @@ describe('checkAndUpdateCommands', () => {
   test('tras un deploy fallido, el siguiente arranque reintenta y guarda el estado', async () => {
     stateStore.set(
       statePath,
-      JSON.stringify({ hash: 'old-hash-000', timestamp: 'anterior', count: 9 })
+      JSON.stringify({ hash: 'old-hash-000', clientId: '123456789', timestamp: 'anterior', count: 9 })
     );
     rest.fail = true;
     assert.equal(await checkAndUpdateCommands(), false);
@@ -168,6 +171,58 @@ describe('checkAndUpdateCommands', () => {
     rest.fail = false;
     assert.equal(await checkAndUpdateCommands(), true);
     assert.equal(JSON.parse(stateStore.get(statePath)).hash, firstHash);
+  });
+
+  test('sin CLIENT_ID: no hace PUT ni guarda estado (falla explícito)', async () => {
+    delete process.env.CLIENT_ID;
+
+    const result = await checkAndUpdateCommands();
+
+    assert.equal(result, false);
+    assert.equal(rest.instances.length, 0, 'no debería llamar a la API sin CLIENT_ID');
+    assert.equal(stateStore.size, 0, 'no debería guardar estado sin CLIENT_ID');
+  });
+
+  test('cambio de CLIENT_ID fuerza re-deploy aunque los comandos sean iguales', async () => {
+    assert.ok(firstHash, 'el hash capturado del primer arranque');
+    stateStore.set(
+      statePath,
+      JSON.stringify({ hash: firstHash, clientId: 'app-vieja-999', timestamp: 'anterior', count: 9 })
+    );
+
+    const result = await checkAndUpdateCommands();
+
+    assert.equal(result, true, 'debería re-registrar en la app correcta');
+    assert.equal(rest.instances.length, 1);
+    assert.match(rest.instances[0].calls[0].url, /\/applications\/123456789\/commands$/);
+    assert.equal(JSON.parse(stateStore.get(statePath)).clientId, '123456789');
+  });
+
+  test('state viejo sin clientId (formato anterior) fuerza deploy de migración', async () => {
+    assert.ok(firstHash, 'el hash capturado del primer arranque');
+    // El hash viejo era solo de los comandos; el nuevo incluye clientId,
+    // así que nunca coinciden, pero además la falta de clientId fuerza deploy.
+    stateStore.set(
+      statePath,
+      JSON.stringify({ hash: 'cualquier-hash-viejo', timestamp: 'anterior', count: 9 })
+    );
+
+    const result = await checkAndUpdateCommands();
+
+    assert.equal(result, true, 'debería migrar el state viejo con un deploy');
+    assert.equal(rest.instances.length, 1);
+  });
+
+  test('con GUILD_ID: registra comandos de servidor (instantáneos)', async () => {
+    process.env.GUILD_ID = '987654321';
+
+    const result = await checkAndUpdateCommands();
+
+    assert.equal(result, true);
+    assert.equal(rest.instances.length, 1);
+    const putCall = rest.instances[0].calls[0];
+    assert.match(putCall.url, /\/applications\/123456789\/guilds\/987654321\/commands$/);
+    assert.equal(JSON.parse(stateStore.get(statePath)).guildId, '987654321');
   });
 });
 

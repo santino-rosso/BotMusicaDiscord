@@ -67,6 +67,7 @@ A Discord music bot that plays music from YouTube, Spotify and SoundCloud direct
    ```
 
 Slash commands are registered automatically on startup (and re-synced every 6 hours if they change).
+Global commands can take up to 1 hour to appear — set `GUILD_ID` in `.env` for instant registration while testing.
 
 ### Docker
 
@@ -89,6 +90,10 @@ The container includes a real healthcheck (heartbeat every 30s), memory/CPU limi
 
 ## Troubleshooting
 
+- **Bot online but `/` shows no commands**: the most common cause. Check in order:
+  1. `.env` must contain **both** `TOKEN` and `CLIENT_ID` from *your own* application (Developer Portal > General Information > Application ID). Without `CLIENT_ID` the bot logs show `❌ Falta CLIENT_ID...` and commands are never registered. If you fixed it, just restart — the bot detects the change and re-registers automatically.
+  2. The bot must be invited with the `applications.commands` scope (`node generate-invite.js` already includes `scope=bot%20applications.commands`). If you invited it manually with only `bot`, re-invite it with both scopes.
+  3. Global commands take **up to 1 hour** to appear. Either wait + press `Ctrl+R` in Discord to refresh, or set `GUILD_ID` in `.env` for instant guild commands while testing.
 - **"Could not play"**: check the logs (`docker logs gordodj-bot`). If you see `Sign in to confirm you're not a bot`, YouTube is blocking the IP; the bot uses the yt-dlp `android` client to avoid it and, if needed, you can mount a `cookies.txt` (Netscape format) in the project root — the container detects it automatically.
 - **Links don't work but text searches do**: the yt-dlp binary is missing or was truncated (interrupted download during a build). Searches don't use yt-dlp (they go through SoundCloud), so only links fail. The bot checks the binary on startup and warns you; fix it with `npm run setup:ytdlp` or by rebuilding the image (`docker compose build`).
 - **The bot does not respond**: verify it is `healthy` (`docker ps`) and that the `.env` token is valid.

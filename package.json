@@ -6,8 +6,8 @@
     "start": "node index.js",
     "deploy": "node update-commands.js",
     "setup:ytdlp": "node scripts/download-ytdlp.js",
-    "test": "node --test 'test/*.test.js'",
-    "test:integration": "TEST_INTEGRATION=1 node --test 'test/integration/*.test.js'",
+    "test": "node --test test/*.test.js",
+    "test:integration": "TEST_INTEGRATION=1 node --test test/integration/*.test.js",
     "dev": "nodemon index.js",
     "postinstall": "patch-package"
   },

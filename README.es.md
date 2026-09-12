@@ -67,6 +67,7 @@ Un bot de música para Discord que te permite reproducir música de YouTube, Spo
    ```
 
 Los comandos slash se registran automáticamente al arrancar (y se re-sincronizan cada 6 horas si cambian).
+Los comandos globales pueden tardar hasta 1 hora en aparecer — definí `GUILD_ID` en el `.env` para registro instantáneo mientras probás.
 
 ### Docker
 
@@ -89,6 +90,10 @@ El contenedor incluye healthcheck real (heartbeat cada 30s), límites de memoria
 
 ## Solución de problemas
 
+- **Bot online pero `/` no muestra comandos**: la causa más común. Verificá en orden:
+  1. El `.env` debe tener **ambos** `TOKEN` y `CLIENT_ID` de *tu propia* aplicación (Developer Portal > General Information > Application ID). Sin `CLIENT_ID` los logs muestran `❌ Falta CLIENT_ID...` y los comandos nunca se registran. Si lo corregís, solo reiniciá — el bot detecta el cambio y los re-registra solo.
+  2. El bot debe estar invitado con el scope `applications.commands` (`node generate-invite.js` ya incluye `scope=bot%20applications.commands`). Si lo invitaste a mano solo con `bot`, re-invitalo con ambos scopes.
+  3. Los comandos globales tardan **hasta 1 hora** en aparecer. Esperá + apretá `Ctrl+R` en Discord para refrescar, o definí `GUILD_ID` en el `.env` para comandos de servidor instantáneos mientras probás.
 - **"No se pudo reproducir"**: revisá los logs (`docker logs gordodj-bot`). Si aparece `Sign in to confirm you're not a bot`, YouTube está bloqueando la IP; el bot usa el cliente `android` de yt-dlp para evitarlo y, si es necesario, podés montar `cookies.txt` (formato Netscape) en la raíz del proyecto — el contenedor lo detecta automáticamente.
 - **Los enlaces no funcionan pero las búsquedas por texto sí**: el binario de yt-dlp falta o quedó truncado (descarga interrumpida durante un build). Las búsquedas no usan yt-dlp (van por SoundCloud), por eso solo fallan los enlaces. El bot verifica el binario al arrancar y avisa; para arreglarlo corré `npm run setup:ytdlp` o recontruí la imagen (`docker compose build`).
 - **El bot no responde**: verificá que esté `healthy` (`docker ps`) y que el token del `.env` sea válido.
